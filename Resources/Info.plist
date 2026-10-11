@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key>
+    <string>io.github.sadakoa.yubisashi</string>
+    <key>CFBundleName</key>
+    <string>Yubisashi</string>
+    <key>CFBundleDisplayName</key>
+    <string>Yubisashi</string>
+    <key>CFBundleExecutable</key>
+    <string>Yubisashi</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>0.1.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>26.0</string>
+    <key>LSUIElement</key>
+    <true/>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>話しながら指差した内容を記録するために、マイクを使います。</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>録音した声を端末内で文字に起こすために使います。</string>
+</dict>
+</plist>
