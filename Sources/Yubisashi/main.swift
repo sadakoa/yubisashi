@@ -40,6 +40,25 @@ if let i = CommandLine.arguments.firstIndex(of: "--concept-video"), CommandLine.
     RunLoop.main.run()
 }
 
+// 開発用: 本物のページと本物の Claude Code の修正で作るデモ動画（準備 → 修正 → 動画）
+for flag in ["--real-demo-prepare", "--real-demo"] {
+    guard let i = CommandLine.arguments.firstIndex(of: flag), CommandLine.arguments.count > i + 1 else { continue }
+    let app = NSApplication.shared
+    app.setActivationPolicy(.accessory)
+    let dir = URL(fileURLWithPath: CommandLine.arguments[i + 1])
+    Task { @MainActor in
+        do {
+            let url = flag == "--real-demo-prepare" ? try await RealDemo.prepare(dir: dir) : try await RealDemo.render(dir: dir)
+            print(url.path)
+            exit(0)
+        } catch {
+            FileHandle.standardError.write("real demo failed: \(error)\n".data(using: .utf8)!)
+            exit(1)
+        }
+    }
+    app.run()
+}
+
 // 開発用: シンプルな英語のデモ動画（準備 → エージェントの返答を保存 → 動画）
 for flag in ["--simple-demo-prepare", "--simple-demo"] {
     guard let i = CommandLine.arguments.firstIndex(of: flag), CommandLine.arguments.count > i + 1 else { continue }

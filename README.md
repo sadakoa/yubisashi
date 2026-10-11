@@ -103,6 +103,15 @@ swift scripts/make_icon.swift
 .build/release/Yubisashi --concept-video demo-video en     # 英語だけ
 ```
 
+本物の Web ページと、本物の Claude Code の修正で作るデモ動画（約16秒）。`demo-video/real/app` にページ（index.html と styles.css、git で管理）を置いてから:
+
+```bash
+.build/release/Yubisashi --real-demo-prepare demo-video/real   # ページを撮って、指した記録を作る
+# demo-video/real/review/review.md を Claude Code に貼って app を直してもらい、
+# 返答を agent-output.md、手順を agent-steps.txt、`git -C app diff` を diff.txt に保存
+.build/release/Yubisashi --real-demo demo-video/real           # 直った後のページを撮り直して、動画を作る
+```
+
 シンプルな英語のデモ動画を作る（エージェントの返答は、実際に review.md を渡して得たものを使う）:
 
 ```bash
