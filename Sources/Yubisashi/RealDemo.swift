@@ -12,11 +12,37 @@ import WebKit
 ///
 /// 作り物は、声（合成音声）とカーソルの動き（プログラム）だけ。
 enum RealDemo {
-    static let line = "Make this button's color match that one."
+    /// <dir>/scenario.json。話す文、指示語、指す要素（source）と行き先（destination）
+    struct Scenario: Codable {
+        struct Destination: Codable {
+            var selector: String
+            var dx: Double
+            var dy: Double
+        }
+        var line: String
+        /// 読み上げる文（`[[slnc 900]]` などで間を入れられる）。なければ line
+        var spoken: String?
+        var words: [String]
+        var source: String
+        var destination: Destination
+        /// 直った後のページで、変わった所として示す要素の文字
+        var highlightText: String
+
+        static let colorMatch = Scenario(
+            line: "Make this button's color match that one.", spoken: nil, words: ["this", "that"], source: ".share",
+            destination: Destination(selector: ".export", dx: -6, dy: 3), highlightText: "Share")
+
+        static func load(_ dir: URL) -> Scenario {
+            (try? JSONDecoder().decode(Scenario.self, from: Data(contentsOf: dir.appendingPathComponent("scenario.json"))))
+                ?? colorMatch
+        }
+    }
 
     struct Meta: Codable {
+        /// 指した要素
         var share: [Double]
-        var export: [Double]
+        /// 行き先の点（x, y）
+        var target: [Double]
         var duration: Double
         var times: [Double]
         var samples: [CursorSample]
@@ -30,27 +56,32 @@ enum RealDemo {
         let work = dir.appendingPathComponent("work", isDirectory: true)
         try fm.createDirectory(at: work, withIntermediateDirectories: true)
 
-        // 1. ページを撮り、ボタンの位置をページ自身から取る
+        let sc = Scenario.load(dir)
+        // 1. ページを撮り、指す要素と行き先の位置をページ自身から取る
         let shot = try await PageShot.make(appDir: dir.appendingPathComponent("app"))
         let before = try await shot.image()
-        let share = try await shot.rect(".share")
-        let export = try await shot.rect(".export")
+        let share = try await shot.rect(sc.source)
+        let dest = try await shot.rect(sc.destination.selector)
         writePNG(before, to: work.appendingPathComponent("before.png"))
 
         // 2. 声
-        let voice = try ConceptVideo.say(line, voice: "Samantha", to: work.appendingPathComponent("line.wav"))
+        let voice = try ConceptVideo.say(sc.spoken ?? sc.line, voice: "Samantha", to: work.appendingPathComponent("line.wav"))
         let voiceURL = work.appendingPathComponent("voice.wav")
         let samples = try ConceptVideo.combine([voice], gaps: [0.8, 1.2], to: voiceURL)
         let duration = Double(samples.count) / 16000
         let chars = try await Transcriber.transcribe(url: voiceURL, language: .en)
-        let t = try ConceptVideo.wordTimes(["this", "that"], in: chars, english: true)
+        let t = try ConceptVideo.wordTimes(sc.words, in: chars, english: true)
 
-        // 3. カーソル: 「this」で Share、「that」で Export に止まる
+        // 3. カーソル: 1語目で要素に、2語目で行き先に止まる
         let start = CGPoint(x: 1180, y: 760)
         let a = CGPoint(x: share.midX + 4, y: share.midY + 2)
-        let b = CGPoint(x: export.midX - 6, y: export.midY + 3)
+        let b = CGPoint(x: dest.midX + sc.destination.dx, y: dest.midY + sc.destination.dy)
+        // 2語の間が短くても、要素で止まる → 移動 → 行き先で止まる、の順番が崩れないようにする
+        let gap = t[1] - t[0]
+        let leave = t[0] + min(0.65, gap * 0.3)
+        let arrive = t[1] - min(0.35, gap * 0.2)
         let keys: [(Double, CGPoint)] = [
-            (0, start), (t[0] - 0.4, a), (t[0] + 0.65, a), (t[1] - 0.35, b), (t[1] + 0.7, b),
+            (0, start), (t[0] - 0.4, a), (leave, a), (arrive, b), (t[1] + 0.7, b),
             (duration, CGPoint(x: b.x + 30, y: b.y + 140)),
         ]
         var cursor: [CursorSample] = []
@@ -81,9 +112,8 @@ enum RealDemo {
             duration: duration, lang: .en)
 
         let meta = Meta(
-            share: [share.minX, share.minY, share.width, share.height],
-            export: [export.minX, export.minY, export.width, export.height], duration: duration, times: t,
-            samples: cursor)
+            share: [share.minX, share.minY, share.width, share.height], target: [b.x, b.y], duration: duration,
+            times: t, samples: cursor)
         try JSONEncoder().encode(meta).write(to: work.appendingPathComponent("meta.json"))
         return output.markdownURL
     }
@@ -97,15 +127,20 @@ enum RealDemo {
         guard let before = loadImage(work.appendingPathComponent("before.png")) else {
             throw YubisashiError("before.png がありません。先に --real-demo-prepare を実行してください。")
         }
-        let after = try await PageShot.make(appDir: dir.appendingPathComponent("app")).image()
+        let sc = Scenario.load(dir)
+        let afterShot = try await PageShot.make(appDir: dir.appendingPathComponent("app"))
+        let after = try await afterShot.image()
+        let changed = try await afterShot.rect(text: sc.highlightText)
         writePNG(after, to: work.appendingPathComponent("after.png"))
+        // 冒頭: 同じ言葉をスクショと一緒に渡したときの、実際の返答（あれば）
+        let hook = try? String(contentsOf: dir.appendingPathComponent("screenshot-reply.md"), encoding: .utf8)
 
         func read(_ name: String) throws -> String { try String(contentsOf: dir.appendingPathComponent(name), encoding: .utf8) }
         let reviewText = try String(contentsOf: dir.appendingPathComponent("review/review.md"), encoding: .utf8)
         let quote = reviewText.components(separatedBy: "\n").first { $0.hasPrefix("> ") && !$0.contains("To the agent") }?
             .dropFirst(2) ?? ""
         let film = RealFilm(
-            before: before, after: after, meta: meta, quote: String(quote),
+            before: before, after: after, meta: meta, scenario: sc, changed: changed, hook: hook, quote: String(quote),
             steps: try read("agent-steps.txt").components(separatedBy: "\n").filter { !$0.isEmpty },
             diff: try read("diff.txt"), reply: try read("agent-output.md"))
 
@@ -176,6 +211,16 @@ final class PageShot: NSObject, WKNavigationDelegate {
         return CGRect(x: v[0], y: v[1], width: v[2], height: v[3])
     }
 
+    /// その文字だけを持つ一番内側の要素の位置
+    func rect(text: String) async throws -> CGRect {
+        let js = """
+            (() => { const all = [...document.querySelectorAll('body *')].filter(e => e.textContent.trim() === \(String(reflecting: text)));
+              const el = all[all.length - 1]; if (!el) return [0,0,0,0]; const r = el.getBoundingClientRect(); return [r.x, r.y, r.width, r.height]; })()
+            """
+        let v = (try await web.evaluateJavaScript(js) as? [NSNumber])?.map(\.doubleValue) ?? [0, 0, 0, 0]
+        return CGRect(x: v[0], y: v[1], width: v[2], height: v[3])
+    }
+
     func image() async throws -> CGImage {
         let config = WKSnapshotConfiguration()
         config.rect = web.bounds
@@ -198,13 +243,18 @@ private struct RealFilm {
     let before: CGImage
     let after: CGImage
     let meta: RealDemo.Meta
+    let scenario: RealDemo.Scenario
+    /// 直った後のページで変わった要素
+    let changed: CGRect
+    let hook: String?
     let quote: String
     let steps: [String]
     let diff: String
     let reply: String
 
-    // 時間割（秒）
-    let recStart = 1.0
+    // 時間割（秒）。冒頭の対比（スクショ＋文章の実際の返答）がある場合は、その分だけ後ろにずらす
+    var hookLength: Double { hook == nil ? 0 : 4.6 }
+    var recStart: Double { hookLength + 1.0 }
     var recStop: Double { recStart + meta.duration }
     var copied: Double { recStop + 1.0 }
     var paste: Double { copied + 0.7 }
@@ -221,9 +271,9 @@ private struct RealFilm {
     var page: CGRect { CGRect(x: browser.minX, y: browser.minY + 46, width: browser.width, height: browser.height - 46) }
     let terminal = CGRect(x: 1292, y: 146, width: 580, height: 46 + 1220 * 1080 / 1920)
 
-    /// ページの拡大（1 = 等倍）。指している間と、直った直後はボタンのあたりに寄る
+    /// ページの拡大（1 = 等倍）。指している間はカーソルを追い、直った直後は変わった所に寄る
     func zoom(_ t: Double) -> Double {
-        let zin = 2.1
+        let zin = 1.8
         let pointStart = recStart + meta.times[0] - 1.0
         let pointEnd = recStart + meta.times[1] + 0.9
         func ramp(_ a: Double, _ b: Double) -> Double { ease((t - a) / (b - a)) }
@@ -233,9 +283,14 @@ private struct RealFilm {
         return 1 + (zin - 1) * ramp(swapAt - 0.2, swapAt + 0.4)
     }
 
-    /// 寄るときの中心（Share と Export の間の少し下）
-    var focus: CGPoint {
-        CGPoint(x: (meta.share[0] + meta.export[0] + meta.export[2]) / 2, y: meta.share[1] + meta.share[3] / 2 + 70)
+    /// 寄るときの中心。指している間はカーソル（少し遅れて追う）、直った後は変わった要素
+    func focus(_ t: Double) -> CGPoint {
+        if t >= swapAt - 0.2 { return CGPoint(x: changed.midX, y: changed.midY + 40) }
+        let rt = t - recStart
+        let recent = meta.samples.filter { $0.t <= rt && $0.t >= rt - 0.6 }
+        guard !recent.isEmpty else { return OverlaySim.position(meta.samples, max(0, rt)) }
+        return CGPoint(
+            x: recent.map(\.x).reduce(0, +) / Double(recent.count), y: recent.map(\.y).reduce(0, +) / Double(recent.count))
     }
 
     func write(to url: URL) async throws {
@@ -294,6 +349,16 @@ private struct RealFilm {
         ctx.setFillColor(bg)
         ctx.fill(CGRect(origin: .zero, size: ConceptVideo.size))
 
+        if let hook, t < hookLength {
+            drawHook(ctx, t: t, reply: hook)
+            let a = max(0, 1 - t / 0.4, 1 - (hookLength - t) / 0.3)
+            if a > 0 {
+                ctx.setFillColor(bg.copy(alpha: a)!)
+                ctx.fill(CGRect(origin: .zero, size: ConceptVideo.size))
+            }
+            return
+        }
+
         Draw.centered(ctx, Draw.text("Yubisashi", 22, .semibold, Draw.pink), center: CGPoint(x: 960, y: 54))
         Draw.centered(ctx, Draw.text("Point at it. Say it. Paste it.", 46, .bold, ink), center: CGPoint(x: 960, y: 100))
 
@@ -311,11 +376,46 @@ private struct RealFilm {
         Draw.line(ctx, link, x: terminal.maxX - Draw.width(link), baseline: 1034)
 
         // 最初と最後は背景色からフェード（繰り返し再生でつながるように）
-        let a = max(0, 1 - t / 0.4, 1 - (total - t) / 0.5)
+        let a = max(0, 1 - (t - hookLength) / 0.4, 1 - (total - t) / 0.5)
         if a > 0 {
             ctx.setFillColor(bg.copy(alpha: a)!)
             ctx.fill(CGRect(origin: .zero, size: ConceptVideo.size))
         }
+    }
+
+    /// 冒頭: 同じ言葉をスクショと一緒に渡すと、エージェントは何を指しているか分からない（実際の返答）
+    private func drawHook(_ ctx: CGContext, t: Double, reply: String) {
+        Draw.centered(ctx, Draw.text("“\(scenario.line)”", 64, .bold, ink), center: CGPoint(x: 960, y: 150))
+        Draw.centered(ctx, Draw.text("Screenshot + text", 26, .regular, gray), center: CGPoint(x: 960, y: 222))
+
+        // 左: スクショ（実際に渡したもの）
+        let shot = CGRect(x: 250, y: 300, width: 720, height: 405)
+        ctx.saveGState()
+        ctx.setShadow(offset: CGSize(width: 0, height: 12), blur: 34, color: Draw.black.copy(alpha: 0.14))
+        Draw.rrect(ctx, shot, 14, fill: Draw.white)
+        ctx.restoreGState()
+        ctx.saveGState()
+        ctx.addPath(CGPath(roundedRect: shot, cornerWidth: 14, cornerHeight: 14, transform: nil))
+        ctx.clip()
+        Draw.image(ctx, before, in: shot)
+        ctx.restoreGState()
+
+        // 右: 実際の返答（最初の文）
+        let a = min(1, max(0, (t - 0.6) / 0.4))
+        ctx.saveGState()
+        ctx.setAlpha(a)
+        let card = CGRect(x: 1010, y: 300, width: 660, height: 405)
+        Draw.rrect(ctx, card, 14, fill: Draw.white, stroke: Draw.rgb(0xE5E5EA), lw: 1)
+        Draw.line(ctx, Draw.text("Claude", 20, .semibold, gray), x: card.minX + 30, baseline: card.minY + 46)
+        let first = reply.replacingOccurrences(of: "**", with: "").replacingOccurrences(of: "`", with: "")
+            .components(separatedBy: "\n").first { !$0.trimmingCharacters(in: .whitespaces).isEmpty } ?? ""
+        var y = card.minY + 100
+        for line in Draw.wrap(Draw.text(first, 30, .semibold, ink), width: card.width - 60) {
+            Draw.line(ctx, line, x: card.minX + 30, baseline: y)
+            y += 42
+        }
+        Draw.line(ctx, Draw.text("Actual reply, unedited.", 17, .regular, gray), x: card.minX + 30, baseline: card.maxY - 26)
+        ctx.restoreGState()
     }
 
     private func window(_ ctx: CGContext, _ r: CGRect, title: String) {
@@ -354,7 +454,8 @@ private struct RealFilm {
         // 寄るときは、寄る中心がページの中央に来るように動かす（端に余白が出ないように抑える）
         let z = zoom(t)
         let k = s * z
-        let progress = (z - 1) / 1.1
+        let progress = (z - 1) / 0.8
+        let focus = focus(t)
         let target = CGPoint(
             x: focus.x * s + (page.width / 2 - focus.x * s) * progress,
             y: focus.y * s + (page.height / 2 - focus.y * s) * progress)
@@ -372,11 +473,10 @@ private struct RealFilm {
             ctx.setAlpha(ease((t - swapAt) / 0.35))
             Draw.image(ctx, after, in: full)
             ctx.restoreGState()
-            // 変わったボタンを一瞬だけ示す
+            // 変わった所を一瞬だけ示す
             let k = (t - swapAt) / 1.2
             if k < 1 {
-                let r = CGRect(x: meta.share[0], y: meta.share[1], width: meta.share[2], height: meta.share[3])
-                    .insetBy(dx: -10 - 14 * k, dy: -10 - 14 * k)
+                let r = changed.insetBy(dx: -10 - 14 * k, dy: -10 - 14 * k)
                 ctx.setStrokeColor(Draw.pink.copy(alpha: 1 - k)!)
                 ctx.setLineWidth(6)
                 ctx.addPath(CGPath(roundedRect: r, cornerWidth: 22, cornerHeight: 22, transform: nil))
@@ -437,9 +537,9 @@ private struct RealFilm {
         guard rt <= meta.duration else { return }
         // 単語ごとに出す（this / that はピンク）
         // 書き起こしで取れた「this」「that」の時刻に合わせて、単語を出す
-        let words = RealDemo.line.components(separatedBy: " ")
-        let iThis = words.firstIndex { $0.lowercased().hasPrefix("this") } ?? 1
-        let iThat = words.firstIndex { $0.lowercased().hasPrefix("that") } ?? 5
+        let words = scenario.line.components(separatedBy: " ")
+        let iThis = words.firstIndex { $0.lowercased().hasPrefix(scenario.words[0]) } ?? 1
+        let iThat = words.lastIndex { $0.lowercased().hasPrefix(scenario.words[1]) } ?? 3
         func revealAt(_ i: Int) -> Double {
             if i <= iThis { return meta.times[0] - 0.25 * Double(iThis - i) }
             if i <= iThat { return meta.times[0] + (meta.times[1] - meta.times[0]) * Double(i - iThis) / Double(iThat - iThis) }
@@ -450,7 +550,7 @@ private struct RealFilm {
         let text = NSMutableAttributedString()
         for (i, wd) in words.prefix(shown).enumerated() {
             let bare = wd.lowercased().trimmingCharacters(in: .punctuationCharacters)
-            let pointing = bare == "this" || bare == "that"
+            let pointing = scenario.words.contains(bare)
             text.append(Draw.text((i > 0 ? " " : "") + wd, 26, pointing ? .bold : .medium, pointing ? Draw.pink : Draw.white))
         }
         let w = Draw.width(text) + 120
@@ -568,26 +668,38 @@ private struct RealFilm {
         let changed = diff.components(separatedBy: "\n").filter {
             ($0.hasPrefix("-") || $0.hasPrefix("+")) && !$0.hasPrefix("---") && !$0.hasPrefix("+++")
         }
-        for line in changed {
+        // 字下げは詰め、長い行は省略する（中身は差分のまま）
+        for line in changed.prefix(6) {
             let added = line.hasPrefix("+")
             let band = CGRect(x: x - 8, y: y - 23, width: maxW + 16, height: 33)
             ctx.setFillColor(added ? Draw.rgb(0xE3F6EA) : Draw.rgb(0xFDE7E7))
             ctx.fill(band)
-            let text = line.replacingOccurrences(of: "\t", with: "  ")
-            Draw.line(ctx, Draw.text(text, mono, .regular, added ? Draw.rgb(0x1E7B45) : Draw.rgb(0xB42318), mono: true), x: x, baseline: y)
+            let body = String(line.dropFirst()).trimmingCharacters(in: .whitespaces)
+            var text = "\(line.prefix(1)) \(body)"
+            let color = added ? Draw.rgb(0x1E7B45) : Draw.rgb(0xB42318)
+            while text.count > 4, Draw.width(Draw.text(text, mono, .regular, color, mono: true)) > maxW {
+                text = String(text.dropLast(2)) + "…"
+                text = text.replacingOccurrences(of: "……", with: "…")
+            }
+            Draw.line(ctx, Draw.text(text, mono, .regular, color, mono: true), x: x, baseline: y)
+            y += 33
+        }
+        if changed.count > 6 {
+            Draw.line(ctx, Draw.text("  …", mono, .regular, gray, mono: true), x: x, baseline: y)
             y += 33
         }
         guard t >= replyAt else { return }
         y += 20
 
-        // 実際の返答（最初の段落）
-        let first = reply.components(separatedBy: "\n\n").first?.replacingOccurrences(of: "`", with: "")
+        // 実際の返答（最初の一文）
+        let paragraph = reply.components(separatedBy: "\n\n").first?.replacingOccurrences(of: "`", with: "")
             .replacingOccurrences(of: "**", with: "") ?? ""
+        let first = paragraph.components(separatedBy: ". ").first.map { $0.hasSuffix(".") ? $0 : $0 + "." } ?? paragraph
         let shown = String(first.prefix(Int((t - replyAt) * 160)))
-        for line in Draw.wrap(Draw.text(shown, 22, .semibold, ink), width: maxW) {
-            guard y < terminal.maxY - 20 else { break }
+        for line in Draw.wrap(Draw.text(shown, 19, .semibold, ink), width: maxW) {
+            guard y < terminal.maxY - 16 else { break }
             Draw.line(ctx, line, x: x, baseline: y)
-            y += 31
+            y += 27
         }
     }
 }

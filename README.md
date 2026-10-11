@@ -1,146 +1,81 @@
-# Yubisashi
+<p align="center">
+  <img src="docs/icon.png" width="112" alt="Yubisashi icon">
+</p>
 
-画面を見ながら話した改善の指示を、AI エージェントにそのまま渡せる形で記録するメニューバーアプリ（macOS 26 以降）。
+<h1 align="center">Yubisashi</h1>
 
-渡す先は、手元のファイルを読めるコード用エージェント（Claude Code・Codex・Cursor など）です。記録の画像は Mac 上のファイルの場所で示すので、claude.ai などのチャットに貼っても画像は見えません。
+<p align="center">
+  Point at your screen, say what you want, and paste it into your coding agent.<br>
+  <sub><i>Yubisashi</i> (指差し) means “pointing” in Japanese.</sub>
+</p>
 
-声と、カーソルの軌跡・止まった位置・クリックを時刻で突き合わせ、「この①ボタン」「ここ②に」のように、指示語がどこを指していたかを番号で結びつけます。
+<p align="center">
+  <img src="docs/demo.gif" width="860" alt="With a plain screenshot, Claude can't tell what “move this up here” means. With Yubisashi, it moves the Download CSV link next to the Share button.">
+</p>
 
-## 効果
+## Why
 
-同じ画面と同じ発話を、2つの方法でエージェント（Claude Code）に渡して比べました（各6回、詳しくは [benchmark/](benchmark/)）。
+“Move this up here” is easy to say and hard to type. A screenshot can’t tell your agent *which* element you mean or *where* it should go.
 
-| 渡し方 | 「この」「ここ」の特定 | 対象の聞き返し | トークン | 時間 |
+Yubisashi records your voice and your cursor together, and links every “this” and “here” to the spot you pointed at.
+
+## How it works
+
+1. Press **⌃⌥R** and talk while you point.
+2. Press **⌃⌥R** again. A `review.md` with annotated screenshots is copied to your clipboard.
+3. Paste it into Claude Code, Codex, Cursor, or any coding agent that can read local files.
+
+What the agent receives:
+
+<p align="center">
+  <img src="docs/review-example.jpg" width="760" alt="Annotated screenshot: ① on the Download CSV link, a pink path up to ② next to the Share button">
+</p>
+
+> Move this①. Up here②.
+
+Each number in the transcript points to the same number in the image. The pink line is the cursor path, light to dark over time.
+
+## Results
+
+Same screen, same words, two ways of handing them to Claude Code:
+
+| | “this” / “here” resolved | Asked which element | Tokens | Time |
 |---|---|---|---|---|
-| スクショ＋文章 | 67%（18/27） | 17回 | 61.3k | 82秒 |
-| Yubisashi | **100%（27/27）** | **0回** | 64.3k | 60秒 |
+| Screenshot + text | 67% (18/27) | 17 times | 61k | 82 s |
+| **Yubisashi** | **100% (27/27)** | **0 times** | 64k | 60 s |
 
-特に、「これを**こっちに**合わせて」のような方向や、見た目では区別できない対象（同じ色のラベルが4つある中の1つなど）で差が出ます。見て分かる不揃いは、スクショ＋文章でもエージェントが自力で見つけます。
+A small benchmark: 2 synthetic UI tasks, 6 runs each. The prompts, scoring and every raw answer are in [benchmark/](benchmark/).
 
-## 使い方
+## Install
 
-1. `⌃⌥R` で記録を始める（メニューバーのアイコンが赤くなる）
-2. 画面を指しながら話す
-3. もう一度 `⌃⌥R` で終える → 数秒で書き出され、`review.md` の中身がクリップボードに入る
-4. Claude Code などのエージェントに貼り付ける
-
-記録中は画面に次の表示が出ます。どれも記録からは除外されるので、動画や画像には写りません。
-
-- 記録中のディスプレイを囲むピンクの枠
-- カーソルの輪（声が大きいほど大きく明るくなる）と、軌跡の残像
-- 同じ場所に止まると満ちていくリング。満ちると「指した」と判定された印が残る（判定の条件は `Analyzer.dwellRadius` / `dwellMinDuration`）
-- クリックしたときの波紋
-- 画面下の帯（記録中・経過時間・声の大きさ → 書き出し中 → コピー完了）。記録中は「■ 終了」と「✕」（2回押しで破棄）をクリックでも操作できる。帯の上でのカーソルの動きは記録に入らない
-- 帯の上の字幕。話している内容をその場で書き起こして出す（確定した文字は白、聞き取り中は薄く、右端に聞き取っている言語）。言語の取り違えや、声が入っていないことにその場で気づける。記録に使う書き起こしは、終わった後に音声ファイルからやり直す
-
-メニューの「指した要素の情報を取る…」からアクセシビリティを許可すると、止まった所・クリックした所にある UI 要素（ボタンなどの種類と名前、Web なら DOM の id・class とページの URL、要素の大きさ）も記録に入ります。エージェントがコードの中で対象を探す手がかりになります。許可しなくても、ほかの機能はそのまま使えます。
-
-メニューの「表示言語」と「話す言語」は別々に選べます。表示言語はメニュー・画面の表示・書き出す記録（review.md と画像の凡例）に使います。話す言語は書き起こしと指示語の照合（「これ」「ここ」/ this, here など）に使い、既定の「自動」では日本語と英語の両方で書き起こして、確からしい方を採用します（違う言語のモデルで聞くと確からしさが大きく下がるため。実測で 0.9 前後と 0.1〜0.7）。
-
-記録は貯めません。`~/Library/Caches/Yubisashi/<日時>/` に最新の1件だけを置き、次の記録を書き出したときに古いものは消えます（クリップボードの review.md が参照する画像は、次に記録するまで読めます）。
-
-| ファイル | 中身 |
-|---|---|
-| `review.md` | エージェントに渡す本体。区間ごとの画像・発話・番号付きの位置・動き |
-| `frames/*.jpg` | 軌跡と番号を描き込んだ画面（下の帯に区間番号と凡例）と、区間ごとのクローズアップ（軌跡なしの元の画面を番号ごとに拡大して1枚にまとめたもの、`01-closeups.jpg` など） |
-| `timeline.json` | 生データ（カーソル座標、1文字ごとの時刻、クリック、画面遷移、要素の情報）。`--reanalyze` 用で、review.md からは案内しない |
-| `recording.mp4` | 人が見返す用の動画（カーソルと声入り） |
-| `audio.wav` | 書き起こしに使った音声 |
-
-## 記録するもの
-
-- カーソルがあるディスプレイ1枚（記録開始時点）
-- カーソル位置 60Hz、クリック、スクロール
-- 画面: 変化があったときだけ静止画を保存。大きく変わったら「画面遷移」、直前にスクロールがあれば「スクロール」として区間内の画像を分ける
-- 声: 端末内の音声認識（SpeechAnalyzer, ja-JP）で1文字ごとの時刻付きで書き起こす。ネットワークには送らない
-
-## 解析のルール（`Analyzer.swift`）
-
-- **区間**: 1 秒以上の沈黙、または文の終わりのあとの 0.8 秒以上の沈黙で区切る。発話がなくてもクリック・画面遷移・長い停止があれば区間にする
-- **止まる**: 半径 8pt 以内に 0.35 秒以上
-- **指示語との対応**: 指示語を言った時刻の前 0.7 秒〜後 0.9 秒にある停止・クリックを探す。止まっていなければ、前後で囲んだ範囲、「このあたり」「around here」のように範囲を示す言い方や小さな範囲の行き来なら、その範囲。どれでもなく、ゆっくり動いていればその瞬間の位置
-- **発話のない区間**: 指示ではなく操作の途中の可能性がある、と記録に書く
-- **動き**: 番号と番号の間を、ほぼ動かない / 素早い移動 / 移動 / ゆっくりなぞる / 囲む / 往復 に分ける
-
-## ビルド
+Requires **macOS 26** and Xcode (Swift 6).
 
 ```bash
+git clone https://github.com/sadakoa/yubisashi
+cd yubisashi
 ./scripts/build.sh --install
 ```
 
-`~/Applications/Yubisashi.app` に入れて起動します。Apple Development 証明書で署名するので、作り直しても権限の許可は保たれます。
+On first use, allow **Microphone** and **Screen & System Audio Recording**, then restart the app.
+**Accessibility** is optional: it adds the pointed element’s name, DOM id/classes and page URL to the review.
 
-初回は次の許可が必要です。
+## Menu bar
 
-- マイク
-- 画面収録とシステムオーディオ録音（許可したあと、アプリを再起動）
-- 日本語の音声モデルのダウンロード（起動時に自動）
+- **Start Recording** (⌃⌥R). While recording, the pill at the bottom also has Stop and Discard.
+- **Copy Latest Review** copies the last review again.
+- **Settings**: UI language (English / 日本語), speech (Auto / English / 日本語), element info, open at login.
 
-アプリアイコン（`Resources/AppIcon.icns`）は、次のコマンドで作り直せます。
+## Privacy
 
-```bash
-swift scripts/make_icon.swift
-```
+- **Nothing leaves your Mac.** Recording and transcription run on-device; there is no network code.
+- **Only the latest recording is kept**, in `~/Library/Caches/Yubisashi/`, readable only by you.
+- **No keystrokes are recorded.** Text in input and password fields is never read.
+- **What you paste is what the agent sees**: the images, the transcript and the folder path.
 
-### 開発用のデモ
+## Development
 
-合成した画面・音声（`say -v Kyoko`）・カーソルの動きで、書き出しまでを通して確かめられます。
+See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
-```bash
-.build/release/Yubisashi --demo /tmp/yubisashi-demo
-```
+## License
 
-保存済みの記録を、今の解析ルールで解析し直す（判定の調整用）:
-
-```bash
-.build/release/Yubisashi --reanalyze ~/Library/Caches/Yubisashi/<日時>/timeline.json
-```
-
-コンセプト動画（約45秒、日本語と英語）を `demo-video/` に作る。読み上げは `say`、カーソルの動きは書き起こしの時刻に合わせて作り、記録中の表示と書き出される記録はアプリと同じ処理で描く:
-
-```bash
-.build/release/Yubisashi --concept-video demo-video        # 両方
-.build/release/Yubisashi --concept-video demo-video en     # 英語だけ
-```
-
-本物の Web ページと、本物の Claude Code の修正で作るデモ動画（約16秒）。`demo-video/real/app` にページ（index.html と styles.css、git で管理）を置いてから:
-
-```bash
-.build/release/Yubisashi --real-demo-prepare demo-video/real   # ページを撮って、指した記録を作る
-# demo-video/real/review/review.md を Claude Code に貼って app を直してもらい、
-# 返答を agent-output.md、手順を agent-steps.txt、`git -C app diff` を diff.txt に保存
-.build/release/Yubisashi --real-demo demo-video/real           # 直った後のページを撮り直して、動画を作る
-```
-
-シンプルな英語のデモ動画を作る（エージェントの返答は、実際に review.md を渡して得たものを使う）:
-
-```bash
-.build/release/Yubisashi --simple-demo-prepare demo-video/simple   # 記録を作る
-# demo-video/simple/review/review.md をエージェントに貼り、返答を demo-video/simple/agent-output.md に保存
-.build/release/Yubisashi --simple-demo demo-video/simple           # 動画を作る
-```
-
-その場の字幕を、マイクの代わりに音声ファイルで確かめる:
-
-```bash
-.build/release/Yubisashi --caption-test path/to/voice.wav
-```
-
-記録中の表示だけを確かめるとき（記録はしない。約9秒で終わる）:
-
-```bash
-.build/release/Yubisashi --overlay-preview
-```
-
-## セキュリティとプライバシー
-
-- **通信しない**: ネットワークに接続するコードはありません。録画・録音・書き起こし（macOS の端末内の音声認識）はすべて Mac の中で行います。音声モデルのダウンロードだけは macOS が行います。
-- **記録は最新の1件だけ**: `~/Library/Caches/Yubisashi/` に、自分だけが読める権限で置きます。次に記録すると古いものは消えます。
-- **写るもの**: 記録中は、記録しているディスプレイに映っているものがすべて写ります（通知やほかのウインドウも）。記録中はピンクの枠と画面下の帯が出ます。
-- **キー入力は記録しない**: ホットキーの登録と、マウスのクリック・スクロールの検知だけで、キーボードの入力は読みません。
-- **指した要素の情報**（アクセシビリティを許可したときだけ）: 入力欄に打ち込んだ文字は読みません。パスワード欄は何も記録しません。ページの URL は `?` 以降（トークンなどが入りうる部分）を落とします。
-- **エージェントに渡すもの**: review.md を貼ったエージェントには、画像・書き起こし・記録フォルダの場所が渡ります。クラウドのエージェントなら、その内容はそのサービスに送られます。
-
-## ライセンス
-
-MIT（[LICENSE](LICENSE)）
+MIT
