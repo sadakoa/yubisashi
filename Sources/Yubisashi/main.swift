@@ -40,6 +40,28 @@ if let i = CommandLine.arguments.firstIndex(of: "--concept-video"), CommandLine.
     RunLoop.main.run()
 }
 
+// 開発用: シンプルな英語のデモ動画（準備 → エージェントの返答を保存 → 動画）
+for flag in ["--simple-demo-prepare", "--simple-demo"] {
+    guard let i = CommandLine.arguments.firstIndex(of: flag), CommandLine.arguments.count > i + 1 else { continue }
+    _ = NSApplication.shared
+    let dir = URL(fileURLWithPath: CommandLine.arguments[i + 1])
+    Task {
+        do {
+            if flag == "--simple-demo-prepare" {
+                let rec = try await SimpleDemo.prepare(dir: dir)
+                print(rec.output.markdownURL.path)
+            } else {
+                print(try await SimpleDemo.run(dir: dir).path)
+            }
+            exit(0)
+        } catch {
+            FileHandle.standardError.write("simple demo failed: \(error)\n".data(using: .utf8)!)
+            exit(1)
+        }
+    }
+    RunLoop.main.run()
+}
+
 // 開発用: 「スクショ＋文章」と「Yubisashi の記録」を比べる素材を作る
 if let i = CommandLine.arguments.firstIndex(of: "--eval-materials"), CommandLine.arguments.count > i + 1 {
     _ = NSApplication.shared

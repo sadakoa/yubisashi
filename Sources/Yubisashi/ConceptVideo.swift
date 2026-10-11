@@ -143,7 +143,10 @@ enum ConceptVideo {
         var duration: Double
     }
 
-    static func record(work: URL, lang: Lang, reviewDir: URL? = nil) async throws -> Recorded {
+    /// 画面の壁紙。紫（コンセプト動画）か、空色（シンプルなデモ動画）
+    enum Wallpaper { case purple, sky }
+
+    static func record(work: URL, lang: Lang, reviewDir: URL? = nil, wallpaper: Wallpaper = .purple) async throws -> Recorded {
         L.override = lang
         L.speechOverride = lang
         let sc = script(lang)
@@ -166,8 +169,8 @@ enum ConceptVideo {
         let choreo = choreograph(times: times, duration: duration)
 
         // 4. アプリの書き出し処理で、実際の記録を作る
-        let screenList = renderScreen(sc, detail: false)
-        let screenDetail = renderScreen(sc, detail: true)
+        let screenList = renderScreen(sc, detail: false, wallpaper: wallpaper)
+        let screenDetail = renderScreen(sc, detail: true, wallpaper: wallpaper)
         let output = try await buildReview(
             dir: reviewDir ?? work.appendingPathComponent("review", isDirectory: true),
             screens: [(0, screenList), (choreo.transition, screenDetail)], choreo: choreo,
@@ -381,14 +384,15 @@ enum ConceptVideo {
 
     // MARK: 画面（アプリの絵）
 
-    static func renderScreen(_ sc: Script, detail: Bool) -> CGImage {
+    static func renderScreen(_ sc: Script, detail: Bool, wallpaper: Wallpaper = .purple) -> CGImage {
         let ctx = Draw.context(size)
         Draw.flip(ctx, height: size.height)
 
         // デスクトップとメニューバー
         let gradient = CGGradient(
             colorsSpace: CGColorSpace(name: CGColorSpace.sRGB)!,
-            colors: [Draw.rgb(0x2B2F4A), Draw.rgb(0x4A3B5C)] as CFArray, locations: [0, 1])!
+            colors: (wallpaper == .sky ? [Draw.rgb(0x2F6FD6), Draw.rgb(0x9CC8F5)] : [Draw.rgb(0x2B2F4A), Draw.rgb(0x4A3B5C)])
+                as CFArray, locations: [0, 1])!
         ctx.drawLinearGradient(gradient, start: .zero, end: CGPoint(x: 0, y: size.height), options: [])
         ctx.setFillColor(Draw.white.copy(alpha: 0.16)!)
         ctx.fill(CGRect(x: 0, y: 0, width: size.width, height: 30))
@@ -488,6 +492,10 @@ enum ConceptVideo {
 
     // MARK: 音を重ねる
 
+    static func muxPublic(video: URL, sounds: [(URL, Double)], to url: URL) async throws {
+        try await mux(video: video, sounds: sounds, to: url)
+    }
+
     private static func mux(video: URL, sounds: [(URL, Double)], to url: URL) async throws {
         let composition = AVMutableComposition()
         let videoAsset = AVURLAsset(url: video)
@@ -538,7 +546,7 @@ struct Timeline {
 
 // MARK: - 映像
 
-private struct Movie {
+struct Movie {
     let sc: ConceptVideo.Script
     let tl: Timeline
     let choreo: ConceptVideo.Choreo
@@ -683,6 +691,18 @@ private struct Movie {
 
     private func drawDemo(_ ctx: CGContext, t: Double, sim: inout OverlaySim) {
         let rt = t - tl.recStart  // 記録開始からの時刻
+        drawScreen(ctx, t: t, sim: &sim)
+        drawCaption(ctx, rt: rt)
+        drawHUD(ctx, t: t, rt: rt)
+
+        // ホットキー
+        drawKey(ctx, t: t - (tl.recStart - 0.5), label: sc.keyStart)
+        drawKey(ctx, t: t - (tl.recStop - 0.3), label: sc.keyStop)
+    }
+
+    /// 画面（アプリ・メニューバー・記録中の表示・カーソル）だけを、画面の座標で描く
+    func drawScreen(_ ctx: CGContext, t: Double, sim: inout OverlaySim, hud: Bool = false) {
+        let rt = t - tl.recStart
         let detail = rt >= choreo.transition
         ctx.saveGState()
         ctx.setAlpha(ease((t - tl.demo) / 0.4))
@@ -691,25 +711,15 @@ private struct Movie {
 
         let recording = rt >= 0 && rt <= tl.recDuration
         drawMenuIcon(ctx, recording: recording, elapsed: rt)
-
-        // 記録中の表示
         if recording {
-            let level = rt >= 0 ? levels[min(levels.count - 1, max(0, Int(rt * ConceptVideo.fps)))] : 0
+            let level = levels[min(levels.count - 1, max(0, Int(rt * ConceptVideo.fps)))]
             sim.advance(to: rt)
             drawBorder(ctx, rt: rt)
             sim.draw(ctx, now: rt, level: level, clicks: choreo.click.map { [$0] } ?? [])
         }
-
-        // カーソル（記録前後も表示）
         let cursorT = max(0, min(tl.recDuration, rt))
         drawArrow(ctx, at: OverlaySim.position(choreo.samples, cursorT))
-
-        drawCaption(ctx, rt: rt)
-        drawHUD(ctx, t: t, rt: rt)
-
-        // ホットキー
-        drawKey(ctx, t: t - (tl.recStart - 0.5), label: sc.keyStart)
-        drawKey(ctx, t: t - (tl.recStop - 0.3), label: sc.keyStop)
+        if hud { drawHUD(ctx, t: t, rt: rt) }
     }
 
     private func drawMenuIcon(_ ctx: CGContext, recording: Bool, elapsed: Double) {
@@ -841,7 +851,7 @@ private struct Movie {
         } else {
             items = [
                 (nil, "check"), (Draw.text(L.s("コピーしました", "Copied"), fs, .medium, white), nil),
-                (Draw.text(L.s("エージェントに貼り付けてください", "Paste it into your agent"), fs, .medium, dim), nil),
+                (Draw.text(L.s("Claude Code などに貼り付けてください", "Paste into Claude Code or another coding agent"), fs, .medium, dim), nil),
             ]
         }
         let widths = items.map { item -> Double in
@@ -1064,7 +1074,7 @@ private struct Movie {
 
 // MARK: - 記録中の表示（CursorOverlayView と同じ見た目を CGContext に描く）
 
-private struct OverlaySim {
+struct OverlaySim {
     let samples: [CursorSample]
     private var index = 0
     private var dwellAnchor: (p: CGPoint, t: Double)?

@@ -103,6 +103,14 @@ swift scripts/make_icon.swift
 .build/release/Yubisashi --concept-video demo-video en     # 英語だけ
 ```
 
+シンプルな英語のデモ動画を作る（エージェントの返答は、実際に review.md を渡して得たものを使う）:
+
+```bash
+.build/release/Yubisashi --simple-demo-prepare demo-video/simple   # 記録を作る
+# demo-video/simple/review/review.md をエージェントに貼り、返答を demo-video/simple/agent-output.md に保存
+.build/release/Yubisashi --simple-demo demo-video/simple           # 動画を作る
+```
+
 その場の字幕を、マイクの代わりに音声ファイルで確かめる:
 
 ```bash
