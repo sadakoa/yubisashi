@@ -350,8 +350,9 @@ private struct RealFilm {
         ctx.fill(CGRect(origin: .zero, size: ConceptVideo.size))
 
         if let hook, t < hookLength {
+            // 最初のコマがそのままサムネイルになるので、フェードインせずに全部見せた状態から始める
             drawHook(ctx, t: t, reply: hook)
-            let a = max(0, 1 - t / 0.4, 1 - (hookLength - t) / 0.3)
+            let a = max(0, 1 - (hookLength - t) / 0.3)
             if a > 0 {
                 ctx.setFillColor(bg.copy(alpha: a)!)
                 ctx.fill(CGRect(origin: .zero, size: ConceptVideo.size))
@@ -401,9 +402,7 @@ private struct RealFilm {
         ctx.restoreGState()
 
         // 右: 実際の返答（最初の文）
-        let a = min(1, max(0, (t - 0.6) / 0.4))
         ctx.saveGState()
-        ctx.setAlpha(a)
         let card = CGRect(x: 1010, y: 300, width: 660, height: 405)
         Draw.rrect(ctx, card, 14, fill: Draw.white, stroke: Draw.rgb(0xE5E5EA), lw: 1)
         Draw.line(ctx, Draw.text("Claude", 20, .semibold, gray), x: card.minX + 30, baseline: card.minY + 46)
