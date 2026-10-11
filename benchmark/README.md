@@ -1,107 +1,109 @@
-# ベンチマーク：スクショ＋文章 vs Yubisashi
+# Benchmark: screenshot + text vs Yubisashi
 
-画面を見ながら「これ」「ここ」と話した改善指示を、AI エージェントがどれだけ正しく受け取れるかを比べました。
+How well does a coding agent understand improvement notes like “make **this** match **that**” when it gets them as a plain screenshot and text, versus as a Yubisashi recording?
 
-## 結果
+## Results
 
-| 条件 | 回数 | 指示語の特定 | 指示語の聞き返し | トークン（平均） | 時間（平均） |
+| Condition | Runs | “this” / “here” resolved | Asked which element | Tokens (avg) | Time (avg) |
 |---|---|---|---|---|---|
-| A：スクショ＋文章 | 6 | 18/27（67%） | 17/27 | 61.3k | 82.3秒 |
-| **Yubisashi v0.3** | 6 | **27/27（100%）** | **0/27** | 64.3k（+5%） | 60.1秒（−27%） |
+| A: Screenshot + text | 6 | 18/27 (67%) | 17/27 | 61.3k | 82.3 s |
+| **Yubisashi v0.3** | 6 | **27/27 (100%)** | **0/27** | 64.3k (+5%) | 60.1 s (−27%) |
 
-- **指示語の特定**：「この」「こっち」「ここ」が指す要素を、エージェントが正しく特定できた数です。
-- **指示語の聞き返し**：どの要素を指しているかを、エージェントがユーザーに確認しようとした数です。人とエージェントの往復が、その分増えます。
-- トークンと時間は、エージェント1回分の合計です（読み込み・推論・回答のすべてを含みます）。
+- **Resolved**: the agent identified the element that “this”, “that”, “here” referred to.
+- **Asked which element**: the agent asked the user to confirm what a word referred to. Each one is an extra round trip.
+- Tokens and time are per agent run (reading, reasoning and answering).
 
-### 題材ごと
+### By task
 
-| 題材 | 条件 | 指示語の特定 | 聞き返し | トークン | 時間 |
+| Task | Condition | Resolved | Asked | Tokens | Time |
 |---|---|---|---|---|---|
-| ボタン（4語） | A | 6/12（50%） | 9/12 | 56.7k | 37.7秒 |
-| | Yubisashi v0.3 | 12/12（100%） | 0/12 | 61.7k | 49.0秒 |
-| ダッシュボード（5語） | A | 12/15（80%） | 8/15 | 65.8k | 126.9秒 |
-| | Yubisashi v0.3 | 15/15（100%） | 0/15 | 66.8k | 71.3秒 |
+| Buttons (4 words) | A | 6/12 (50%) | 9/12 | 56.7k | 37.7 s |
+| | Yubisashi v0.3 | 12/12 (100%) | 0/12 | 61.7k | 49.0 s |
+| Dashboard (5 words) | A | 12/15 (80%) | 8/15 | 65.8k | 126.9 s |
+| | Yubisashi v0.3 | 15/15 (100%) | 0/15 | 66.8k | 71.3 s |
 
-### 分かったこと
+### What we learned
 
-- **Yubisashi が効くのは、画面を見ても答えが出ない指示**です。
-  - 「このボタンの色、こっちと揃えたい」：A は3回とも「どちらをどちらに合わせるか」が分からず、聞き返しました。
-  - 「このラベル、もう少し濃くしたい」：同じ見た目のラベルが4つあり、A は3回ともどれか特定できませんでした。
-- **A も、見て分かる不揃いには強い**です。アイコンの大きさ、タグの間隔、1枚だけ広い余白は、A も画素を測って自力で見つけました。
-- **時間は題材によって逆転します**。簡単な題材（ボタン）では、画像が多い分 Yubisashi のほうが遅く（+30%）、難しい題材（ダッシュボード）では、A が画素の測定に時間を使うため Yubisashi のほうが速くなりました（−44%）。
-- 両方の条件で残った確認（「平均滞在だけか、4枚全部か」「戻るボタンをどこへ移すか」）は、発話そのものに範囲や移動先が含まれていないためです。記録の改善では解消できないので、聞き返すのが正しい振る舞いです。
+- **Yubisashi helps most when the screen alone can’t answer the question.**
+  - “Make this button’s color match that one”: with a screenshot, the agent could not tell which button should change, all 3 times.
+  - “Make this label a bit darker”: four labels look identical, and the agent could not tell which one, all 3 times.
+- **Screenshots do fine with visible inconsistencies.** A bigger icon, a tighter gap or a wider padding were found by measuring pixels.
+- **Time depends on the task.** On the simple task Yubisashi was slower (+30%, more images to read). On the harder one it was faster (−44%), because the agent no longer had to measure pixels to guess.
+- Questions that remained in both conditions (“only this label, or all four?”, “where should the back button go?”) are about scope or destination that the speech itself left open. Asking is the right behavior there.
 
-## バージョンごとの推移
+## Version history
 
-| バージョン | 変更 | 回数 | 指示語の特定 | トークン | 時間 |
+| Version | Change | Runs | Resolved | Tokens | Time |
 |---|---|---|---|---|---|
-| v0.1 | 最初の版 | 4 | 18/18（100%） | 75.8k | 107.2秒 |
-| v0.2 | 番号ごとのクローズアップ（軌跡なしの元の画面）、区間の区切りの修正、生データ（timeline.json）への案内を削除 | 4 | 18/18（100%） | 67.2k | 66.2秒 |
-| v0.3 | 冒頭のエージェント向け説明を最小限に（review.md が約4割短く） | 6 | 27/27（100%） | 64.3k | 60.1秒 |
+| v0.1 | First version | 4 | 18/18 (100%) | 75.8k | 107.2 s |
+| v0.2 | Per-spot close-ups without the path drawn; better segment splitting; no pointer to the raw `timeline.json` | 4 | 18/18 (100%) | 67.2k | 66.2 s |
+| v0.3 | Minimal agent instructions at the top (review.md about 40% shorter) | 6 | 27/27 (100%) | 64.3k | 60.1 s |
 
-v0.1 では、エージェントが数千行ある生データを読みに行ったり、軌跡や番号が対象の文字に重なって読みにくかったりしたため、トークンと時間が多くかかっていました。
+In v0.1 agents sometimes opened the thousands-of-lines raw data, and the path and badges covered the text they pointed at, which cost tokens and time.
 
-## 方法
+## Method
 
-### 題材
+### Tasks
 
-合成した画面と、合成音声（macOS の `say -v Kyoko`）の発話を使いました。カーソルの動きは、書き起こしで指示語を言った時刻に合わせて作り、Yubisashi の解析と書き出しの処理をそのまま通しています。
+Synthetic screens and synthetic speech (macOS `say -v Kyoko`, Japanese). The cursor movement is generated from the times the pointing words are spoken in the transcript, then run through Yubisashi’s own analysis and export.
 
-**ボタン**（2画面、発話2文）
+**Buttons** (2 screens, 2 sentences)
 
 > このボタンの色、こっちと揃えたい。それから、ここを押すと詳細に行くけど、戻るボタンがこのあたりにあるのは遠い。
+> *“I want this button’s color to match this one. Then, when I press here it opens the details, but the back button being around here is too far.”*
 
-| 指示語 | 正解 |
+| Word | Correct element |
 |---|---|
-| この（ボタン） | 一覧画面の「保存」ボタン |
-| こっち | 「キャンセル」ボタン（保存の色をキャンセルに合わせる） |
-| ここ | 右端の「料金ページ」カード（押して詳細画面へ） |
-| この（あたり） | 詳細画面の「‹ 戻る」 |
+| この (this button) | The “Save” button on the list screen |
+| こっち (this one) | The “Cancel” button (Save should match Cancel) |
+| ここ (here) | The “Pricing page” card on the right (pressed to open the details) |
+| この (around here) | “‹ Back” on the details screen |
 
-**ダッシュボード**（1画面、発話4文）
+**Dashboard** (1 screen, 4 sentences)
 
 > この余白、こっちと同じにして。このアイコンだけ、少し大きい。このラベル、もう少し濃くしたい。タグの並び、ここだけ詰まってる。
+> *“Make this padding the same as this one. Only this icon is a bit bigger. I want this label a bit darker. In the tags, only here is too tight.”*
 
-| 指示語 | 正解 |
+| Word | Correct element |
 |---|---|
-| この（余白） | 2枚目のカード「コンバージョン」の左の内側余白 |
-| こっち | 1枚目のカード「訪問者」の左の内側余白 |
-| この（アイコン） | ヘッダーの6つのアイコンのうち、ベル |
-| この（ラベル） | 3枚目のカードのラベル「平均滞在」（4枚とも同じ色） |
-| ここ | タグ「リピーター」と「モバイル」の間 |
+| この (this padding) | Left inner padding of the 2nd card, “Conversion” |
+| こっち (this one) | Left inner padding of the 1st card, “Visitors” |
+| この (this icon) | The bell, among six header icons |
+| この (this label) | The “Avg. time” label on the 3rd card (all four labels look the same) |
+| ここ (here) | Between the “Repeat” and “Mobile” tags |
 
-画面には、アイコンの大きさ・余白・タグの間隔に、見て分かる不揃いを入れてあります。ラベルの色だけは4つとも同じで、見た目からは対象を決められません。
+The icon size, the padding and the tag gap are visibly inconsistent on screen. The label color is not: nothing on screen tells which label is meant.
 
-### 条件
+### Conditions
 
-- **A：スクショ＋文章**：軌跡のないスクリーンショットと、発話の書き起こし（音声入力とスクショの組み合わせに相当）
-- **Yubisashi**：Yubisashi が書き出した review.md と画像
+- **A: Screenshot + text** — screenshots without any marks, plus the transcript (like dictation + a screenshot).
+- **Yubisashi** — the `review.md` and images that Yubisashi exports.
 
-エージェントは Claude Code の汎用サブエージェント（Claude Opus 5.5）で、条件ごとに別々に起動しました。依頼文は [prompt.md](prompt.md) のとおりで、違うのは渡す資料だけです。
+The agent was a Claude Code general-purpose subagent (Claude Opus 5.5), started separately for every run. All runs got the same instructions; only the materials differed. See [prompt.md](prompt.md).
 
-### 採点
+### Scoring
 
-- **正解**：回答の主な案として、その要素を特定している（確信度は問わない）。
-- **不正解**：候補を並べただけ、どちらか決めずに質問している、または別の要素を挙げている。
-- **A に有利にした扱い**：「こっち」を「ほかの3枚のカード」と答えた場合も、直した結果が同じなので正解としました。「戻るボタン」は発話で名前が出ているので、A でも正解としています。
-- **聞き返し**：対象を確かめる質問をした指示語を数えました（正解かどうかとは別に数えています）。範囲や程度についての質問（「平均滞在だけか、全部か」など）は数えていません。
+- **Resolved**: the agent’s main answer names the right element (regardless of the stated confidence).
+- **Not resolved**: the agent only listed candidates, asked without choosing, or named a different element.
+- **In favor of A**: answering “this one” as “the other three cards” counted as correct, because the fix ends up the same. “Back button” is named in the speech, so A got it right too.
+- **Asked which element**: counted per word the agent asked the user to confirm, whether or not its guess was right. Questions about scope or degree (“only this one or all four?”) were not counted.
 
-回ごとの数値は [results.csv](results.csv)、エージェントの回答は [runs/](runs/) にそのまま置いています。渡した資料は [materials/](materials/) にあります（v0.3 と A の分。ファイルの場所は `<materials>` に置き換えています）。
+Per-run numbers are in [results.csv](results.csv). Every agent answer is in [runs/](runs/) (in Japanese, as the prompt was). The materials given to the agents are in [materials/](materials/) (A and v0.3; file locations replaced with `<materials>`).
 
-## 注意点
+## Limitations
 
-- 題材は合成した画面2つで、回数も条件ごとに6回（v0.1・v0.2 は4回）と少ないです。
-- 音声は合成音声で、書き起こしはほぼ正確でした。実際の声では認識の誤りが増えます。
-- 題材を作ったのも採点したのも作者です。正解は台本で決まっていますが、題材の選び方には偏りがあり得ます。
-- A の文章は、話したままの書き起こしです。丁寧に書き直せば A の正解率は上がりますが、その手間は測っていません。
-- トークンには、エージェント自体の固定の分（指示や道具の説明）も含まれます。条件間の差は、主に資料（画像の枚数）の違いです。
-- v0.1・v0.2 の回と、A・v0.3 の一部の回は、別の日に実行しました。依頼文と A の資料は同じです。
+- Two synthetic screens and few runs: 6 per condition (4 for v0.1 and v0.2).
+- The voice was synthetic and transcribed almost perfectly. Real speech will have more recognition errors.
+- The tasks were designed and scored by the author. The correct answers are fixed by the script, but the choice of tasks may be biased.
+- In A, the text is the raw transcript. Rewriting it carefully would raise A’s score, but that effort was not measured.
+- Tokens include the agent’s fixed overhead (instructions and tool descriptions). The difference between conditions mostly comes from the materials (number of images).
+- Runs for v0.1 / v0.2 and some runs for A / v0.3 were made on different days, with the same prompt and the same A materials.
 
-## 再現する
+## Reproduce
 
 ```bash
 swift build -c release
-.build/release/Yubisashi --eval-materials eval   # 題材ごとに A/ と B/ の資料を作る
+.build/release/Yubisashi --eval-materials eval   # builds eval/<task>/A and eval/<task>/B
 ```
 
-できた `eval/<題材>/A` と `eval/<題材>/B` を [prompt.md](prompt.md) の依頼文でエージェントに渡し、上の正解表で採点します。
+Give `eval/<task>/A` and `eval/<task>/B` to an agent with the prompt in [prompt.md](prompt.md), and score with the tables above.

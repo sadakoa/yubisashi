@@ -48,22 +48,41 @@ A small benchmark: 2 synthetic UI tasks, 6 runs each. The prompts, scoring and e
 
 ## Install
 
-Requires **macOS 26** and Xcode (Swift 6).
+There is no prebuilt app yet, so you build it yourself. You need **macOS 26** and **Xcode 26**.
 
-```bash
-git clone https://github.com/sadakoa/yubisashi
-cd yubisashi
-./scripts/build.sh --install
-```
+1. **Download** the code with git, or use **Code → Download ZIP** on this page and unzip it.
 
-On first use, allow **Microphone** and **Screen & System Audio Recording**, then restart the app.
-**Accessibility** is optional: it adds the pointed element’s name, DOM id/classes and page URL to the review.
+   ```bash
+   git clone https://github.com/sadakoa/yubisashi
+   cd yubisashi
+   ```
 
-## Menu bar
+2. **Build and install.** This puts `Yubisashi.app` in `~/Applications` and starts it. Its icon appears in the menu bar.
 
-- **Start Recording** (⌃⌥R). While recording, the pill at the bottom also has Stop and Discard.
+   ```bash
+   ./scripts/build.sh --install
+   ```
+
+3. **Allow permissions** when macOS asks: **Microphone** and **Screen & System Audio Recording**. Then quit Yubisashi from the menu bar and open it again.
+
+On first launch, macOS also downloads the on-device speech models. **Settings → Speech model** shows when they’re ready.
+
+**Accessibility** is optional (**Settings → Capture Element Info…**). It adds the pointed element’s name, DOM id/classes and page URL to the review.
+
+## Usage
+
+1. Open what you want to change: your app, a web page, a design.
+2. Press **⌃⌥R** (Control-Option-R). A pill appears at the bottom of the screen, and a pink trail follows your cursor.
+3. **Point and talk.** Rest the cursor on a spot for a moment as you say “this” or “here”, or circle an area for “around here”. Your words appear as live captions.
+4. Press **⌃⌥R** again, or **Stop** in the pill. After a few seconds, the review is copied.
+5. Paste it (⌘V) into Claude Code in your project and send.
+
+Changed your mind? Click **Discard** in the pill.
+
+From the menu bar:
+
 - **Copy Latest Review** copies the last review again.
-- **Settings**: UI language (English / 日本語), speech (Auto / English / 日本語), element info, open at login.
+- **Settings**: UI language (English / 日本語), speech language (Auto / English / 日本語), open at login.
 
 ## Privacy
 

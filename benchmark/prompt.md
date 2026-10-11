@@ -1,8 +1,10 @@
-# エージェントへの依頼文
+# Prompt given to the agents
 
-どの条件でも、エージェント（Claude Code の汎用サブエージェント）には同じ依頼文を渡しました。違うのは「資料」の部分だけです。正解は伝えていません。
+Every condition got the same instructions; only the “Materials” part differed. The correct answers were not given.
 
-## 共通部分
+The prompt was written in Japanese, as below. An English translation follows.
+
+## Original (Japanese)
 
 ```
 あなたはコーディングエージェントです。ユーザー（デザイナー）から、画面の改善指示を受け取りました。次の資料だけを読んでください。ほかのファイルやフォルダは開かないでください。ファイルの作成や編集もしないでください。
@@ -20,17 +22,35 @@
 回答だけを返してください。
 ```
 
-## 条件ごとの資料
-
-**A（スクショ＋文章）**
+## English translation
 
 ```
-- 画面のスクリーンショット: <materials>/<題材>/A/screen-1.jpg（ボタンの題材は screen-2.jpg も、操作の順に2枚）
-- ユーザーが話した指示（音声入力の書き起こし）: <materials>/<題材>/A/instruction.txt
+You are a coding agent. A user (a designer) sent you improvement notes about a screen. Read only the materials below. Do not open other files or folders. Do not create or edit files.
+
+Materials:
+(materials for the condition)
+
+Task: turn the notes into a list of improvements a developer can work from. For each item, write:
+- Target: which element. Be specific, using its position on screen and nearby text, so it can't be confused with another element
+- Problem
+- Expected change
+- Confidence: high / medium / low (how sure you are about the target)
+If you can't identify the target, list your best guesses and the question you'd ask the user.
+
+Return only your answer.
 ```
 
-**Yubisashi（各バージョン）**
+## Materials per condition
+
+**A: Screenshot + text**
 
 ```
-- ユーザーの記録: <materials>/<題材>/B/review.md （この中で参照されている画像やファイルも読んでかまいません）
+- Screenshot: <materials>/<task>/A/screen-1.jpg (the buttons task also has screen-2.jpg, in the order of the steps)
+- What the user said (dictation transcript): <materials>/<task>/A/instruction.txt
+```
+
+**Yubisashi (each version)**
+
+```
+- The user's recording: <materials>/<task>/B/review.md (you may also read the images and files it references)
 ```
