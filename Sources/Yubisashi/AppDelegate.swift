@@ -232,7 +232,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func showAbout() {
         let credits = NSMutableAttributedString(
-            string: L.s("指して、話すだけ。改善の指示を AI エージェントへ。\n", "Point and talk. Improvement notes for your AI agent.\n"),
+            string: L.s("指して話すだけで、エージェントに伝わる。\n", "Point and talk to your coding agent.\n"),
             attributes: [.font: NSFont.systemFont(ofSize: 11), .foregroundColor: NSColor.secondaryLabelColor])
         credits.append(
             NSAttributedString(
@@ -251,32 +251,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
 
-        let header: String
+        // 待機中は見出しを出さない（ホットキーは「記録を開始」の右に出す）。記録中だけ経過時間を見せる
+        let header: String?
         switch state {
-        case .idle: header = L.s("\(Self.hotKeyLabel) で記録を開始", "\(Self.hotKeyLabel) to start recording")
+        case .idle: header = nil
         case .starting: header = L.s("開始しています…", "Starting…")
-        case .recording:
-            header = L.s("記録中", "Recording") + " \(formatTime(session?.elapsed ?? 0)) — "
-                + L.s("\(Self.hotKeyLabel) で終了", "\(Self.hotKeyLabel) to stop")
+        case .recording: header = L.s("記録中", "Recording") + " \(formatTime(session?.elapsed ?? 0))"
         case .processing: header = L.s("書き出しています…", "Exporting…")
         }
-        let headerItem = NSMenuItem(title: header, action: nil, keyEquivalent: "")
-        headerItem.isEnabled = false
-        menu.addItem(headerItem)
-        menu.addItem(.separator())
+        if let header {
+            let headerItem = NSMenuItem(title: header, action: nil, keyEquivalent: "")
+            headerItem.isEnabled = false
+            menu.addItem(headerItem)
+            menu.addItem(.separator())
+        }
 
         switch state {
         case .idle:
-            menu.addItem(item(L.s("記録を開始", "Start Recording"), #selector(toggle)))
+            menu.addItem(hotKeyItem(L.s("記録を開始", "Start Recording")))
         case .recording:
-            menu.addItem(item(L.s("記録を終了して書き出す", "Stop and Export"), #selector(toggle)))
+            menu.addItem(hotKeyItem(L.s("記録を終了して書き出す", "Stop and Export")))
             menu.addItem(item(L.s("記録を破棄", "Discard Recording"), #selector(cancelRecording)))
         default:
             break
         }
         menu.addItem(.separator())
 
-        let copy = item(L.s("最新の記録をもう一度コピー", "Copy Latest Review Again"), #selector(copyLast))
+        let copy = item(L.s("最新の記録をコピー", "Copy Latest Review"), #selector(copyLast))
         copy.isEnabled = lastOutput != nil
         menu.addItem(copy)
         let reveal = item(L.s("最新の記録を Finder で表示", "Show Latest Review in Finder"), #selector(revealLast))
@@ -351,6 +352,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard let raw = sender.representedObject as? String, let mode = SpeechMode(rawValue: raw) else { return }
         L.speechMode = mode
         prepareModel()
+    }
+
+    /// ⌃⌥R を右側に表示する項目（実際の受け付けはグローバルのホットキー）
+    private func hotKeyItem(_ title: String) -> NSMenuItem {
+        let i = NSMenuItem(title: title, action: #selector(toggle), keyEquivalent: "r")
+        i.keyEquivalentModifierMask = [.control, .option]
+        i.target = self
+        return i
     }
 
     private func item(_ title: String, _ action: Selector) -> NSMenuItem {
