@@ -43,6 +43,11 @@ final class RecordingSession {
         let backingScale = NSScreen.screens.first { $0.displayID == displayID }?.backingScaleFactor ?? 2
 
         let session = RecordingSession(dir: dir, displayID: displayID)
+        // 記録（画面・声・書き起こし）は自分だけが読めるようにする
+        let ownerOnly: [FileAttributeKey: Any] = [.posixPermissions: 0o700]
+        try FileManager.default.createDirectory(at: outputRoot, withIntermediateDirectories: true, attributes: ownerOnly)
+        try? FileManager.default.setAttributes(ownerOnly, ofItemAtPath: outputRoot.path)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true, attributes: ownerOnly)
         try FileManager.default.createDirectory(at: session.rawFramesDir, withIntermediateDirectories: true)
 
         let micGranted = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized

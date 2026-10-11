@@ -10,8 +10,11 @@ import CoreText
 enum EvalMaterials {
     static func run(dir: URL) async throws {
         let fm = FileManager.default
-        try? fm.removeItem(at: dir)
+        // 指定されたフォルダそのものは消さない。作り直すのは、このコマンドが作るサブフォルダだけ
         try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        for own in ["buttons", "dashboard", "_work-buttons", "_work-dashboard"] {
+            try? fm.removeItem(at: dir.appendingPathComponent(own))
+        }
 
         // 題材1: デモと同じ（ボタンの色、カード、戻るボタン）
         let buttons = try await ConceptVideo.record(

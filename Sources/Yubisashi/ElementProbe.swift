@@ -81,6 +81,9 @@ final class ElementProbe {
             cursor = parent(e)
         }
 
+        // パスワード欄は何も記録しない
+        if Self.isSecure(target) || Self.isSecure(hit) { return nil }
+
         var info = ElementInfo()
         info.app = NSRunningApplication(processIdentifier: pid)?.localizedName
         info.role = string(target, kAXRoleAttribute)
@@ -103,7 +106,7 @@ final class ElementProbe {
         while let el = e, depth < 12 {
             let role = string(el, kAXRoleAttribute)
             if role == "AXWebArea", info.url == nil, let url = attr(el, "AXURL") {
-                info.url = (url as? URL)?.absoluteString ?? (url as? String)
+                info.url = Self.withoutQuery((url as? URL)?.absoluteString ?? (url as? String))
             }
             if role == "AXWindow" || role == "AXApplication" { break }
             if names.count < 3, let l = label(el), let role {
@@ -138,8 +141,35 @@ final class ElementProbe {
         return (v as! AXUIElement)
     }
 
+    /// 入力欄の値（打ち込んだ文字）は読まない。名前・説明・プレースホルダーだけを使う
+    private static let inputRoles: Set<String> = [
+        "AXTextField", "AXTextArea", "AXComboBox", "AXSearchField", "AXSecureTextField",
+    ]
+
+    private static func isSecure(_ e: AXUIElement) -> Bool {
+        var role: CFTypeRef?
+        var subrole: CFTypeRef?
+        AXUIElementCopyAttributeValue(e, kAXRoleAttribute as CFString, &role)
+        AXUIElementCopyAttributeValue(e, kAXSubroleAttribute as CFString, &subrole)
+        return (role as? String) == "AXSecureTextField" || (subrole as? String) == "AXSecureTextField"
+    }
+
+    /// URL の ? 以降と # 以降（トークンなどが入りうる）を落とす
+    private static func withoutQuery(_ url: String?) -> String? {
+        guard let url, var c = URLComponents(string: url) else { return url }
+        c.query = nil
+        c.fragment = nil
+        c.user = nil
+        c.password = nil
+        return c.string
+    }
+
     private func label(_ e: AXUIElement) -> String? {
-        for name in [kAXTitleAttribute, kAXDescriptionAttribute, kAXValueAttribute, "AXPlaceholderValue"] {
+        let isInput = string(e, kAXRoleAttribute).map { Self.inputRoles.contains($0) } ?? false
+        let names = isInput
+            ? [kAXTitleAttribute, kAXDescriptionAttribute, "AXPlaceholderValue"]
+            : [kAXTitleAttribute, kAXDescriptionAttribute, kAXValueAttribute, "AXPlaceholderValue"]
+        for name in names {
             if let s = string(e, name)?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty {
                 return s.count > 60 ? String(s.prefix(60)) + "…" : s
             }
