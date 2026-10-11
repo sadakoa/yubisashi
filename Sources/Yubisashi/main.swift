@@ -123,7 +123,7 @@ if CommandLine.arguments.contains("--overlay-preview") {
     }
     DispatchQueue.main.asyncAfter(deadline: .now() + 6) { overlay.showProcessing() }
     DispatchQueue.main.asyncAfter(deadline: .now() + 7) {
-        overlay.finish(.done("コピーしました", "エージェントに貼り付けてください"), after: 1.5)
+        overlay.finish(.done(L.s("コピーしました", "Copied"), L.s("Claude Code などに貼り付けてください", "Paste into Claude Code or another coding agent")), after: 1.5)
     }
     DispatchQueue.main.asyncAfter(deadline: .now() + 9.5) { exit(0) }
     app.run()

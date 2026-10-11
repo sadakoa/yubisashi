@@ -10,6 +10,7 @@ rm -rf "build/Yubisashi.app"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp .build/release/Yubisashi "$APP/Contents/MacOS/"
 cp Resources/Info.plist "$APP/Contents/"
+cp Resources/AppIcon.icns "$APP/Contents/Resources/"
 
 # 同じ証明書で署名し続けると、作り直しても画面収録やマイクの許可が保たれる
 IDENTITY=$(security find-identity -v -p codesigning | awk -F'"' '/Apple Development/ {print $2; exit}')

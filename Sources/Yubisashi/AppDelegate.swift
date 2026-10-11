@@ -177,7 +177,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 .done(
                     L.s("コピーしました", "Copied"),
                     transcribed
-                        ? L.s("エージェントに貼り付けてください", "Paste it into your agent")
+                        ? L.s("Claude Code などに貼り付けてください", "Paste into Claude Code or another coding agent")
                         : L.s("声は書き起こせませんでした", "No speech was transcribed")),
                 after: 2.4)
         }
@@ -228,6 +228,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         ElementProbe.requestTrust()
     }
 
+    static let repositoryURL = URL(string: "https://github.com/sadakoa/yubisashi")!
+
+    @objc private func showAbout() {
+        let credits = NSMutableAttributedString(
+            string: L.s("指して、話すだけ。改善の指示を AI エージェントへ。\n", "Point and talk. Improvement notes for your AI agent.\n"),
+            attributes: [.font: NSFont.systemFont(ofSize: 11), .foregroundColor: NSColor.secondaryLabelColor])
+        credits.append(
+            NSAttributedString(
+                string: "github.com/sadakoa/yubisashi",
+                attributes: [.font: NSFont.systemFont(ofSize: 11), .link: Self.repositoryURL]))
+        NSApp.activate()
+        NSApp.orderFrontStandardAboutPanel(options: [.credits: credits])
+    }
+
     @objc private func quit() {
         NSApp.terminate(nil)
     }
@@ -270,26 +284,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(reveal)
         menu.addItem(.separator())
 
-        menu.addItem(languageMenu(L.s("表示言語", "Language"), current: L.lang, action: #selector(selectUILanguage(_:))))
-        menu.addItem(speechMenu())
+        // 設定はひとつにまとめ、普段使う項目だけを上に出す
+        let settings = NSMenuItem(title: L.s("設定", "Settings"), action: nil, keyEquivalent: "")
+        let sub = NSMenu()
+        sub.addItem(languageMenu(L.s("表示言語", "Language"), current: L.lang, action: #selector(selectUILanguage(_:))))
+        sub.addItem(speechMenu())
         let model = NSMenuItem(
             title: L.s("音声モデル: ", "Speech model: ") + modelStatus.label,
             action: nil, keyEquivalent: "")
         model.isEnabled = false
-        menu.addItem(model)
+        sub.addItem(model)
+        sub.addItem(.separator())
         if ElementProbe.isTrusted {
             let probe = NSMenuItem(title: L.s("指した要素の情報: オン", "Element info: on"), action: nil, keyEquivalent: "")
             probe.isEnabled = false
-            menu.addItem(probe)
+            sub.addItem(probe)
         } else {
-            menu.addItem(
+            sub.addItem(
                 item(
                     L.s("指した要素の情報を取る…（アクセシビリティの許可）", "Capture Element Info… (needs Accessibility)"),
                     #selector(requestAccessibility)))
         }
         let login = item(L.s("ログイン時に起動", "Open at Login"), #selector(toggleLoginItem))
         login.state = SMAppService.mainApp.status == .enabled ? .on : .off
-        menu.addItem(login)
+        sub.addItem(login)
+        settings.submenu = sub
+        menu.addItem(settings)
+        menu.addItem(item(L.s("Yubisashi について", "About Yubisashi"), #selector(showAbout)))
         menu.addItem(.separator())
         menu.addItem(item(L.s("Yubisashi を終了", "Quit Yubisashi"), #selector(quit)))
     }
